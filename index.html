@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Minimal Study Timer</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600&family=Space+Grotesk:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    
+    <style>
+        * {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            user-select: none;
+        }
+        .font-mono-digits {
+            font-family: 'Space Grotesk', monospace;
+            font-variant-numeric: tabular-nums;
+        }
+        
+        .glass-button {
+            background: rgba(255, 255, 255, 0.04);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .glass-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.18);
+            transform: translateY(-1px);
+        }
+        .glass-button:active {
+            transform: translateY(0);
+        }
+        .glass-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: #eceeec;
+            transition: all 0.3s;
+        }
+        .glass-input:focus {
+            outline: none;
+            border-color: rgba(200, 220, 215, 0.5);
+            box-shadow: 0 0 15px rgba(250, 250, 250, 0.1);
+        }
+
+        /* Auto-Hide Idle UI Effect */
+        .autohide-ui {
+            transition: opacity 1s ease;
+        }
+        .idle-hidden {
+            opacity: 0.2;
+        }
+        .idle-hidden:hover {
+            opacity: 1;
+        }
+
+        /* Subtle Pulse when timer finishes */
+        @keyframes gentlePulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(0.99); }
+        }
+        .finished-pulse {
+            animation: gentlePulse 3s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-[#07090c] text-[#e0e4e0] min-h-screen overflow-hidden relative select-none flex flex-col justify-between">
+
+    <!-- Interactive Dynamic Foggy Peak Background Canvas -->
+    <canvas id="bgCanvas" class="fixed inset-0 w-full h-full z-0 pointer-events-none"></canvas>
+
+    <!-- Main Clean Minimal UI Wrapper -->
+    <div id="uiWrapper" class="relative z-10 flex flex-col min-h-screen justify-between p-6 sm:p-10 autohide-ui">
+
+        <!-- Top Right Minimal Action Bar (No Scene Bar, No Header Title) -->
+        <header class="w-full max-w-5xl mx-auto flex justify-end items-center py-2">
+            <div class="flex items-center space-x-2">
+                <!-- Sound Controls -->
+                <button id="ambientSoundBtn" onclick="toggleAmbientSound()" class="p-2.5 rounded-xl glass-button text-slate-300 hover:text-white" title="Toggle Ambient Rain & Mist Soundscape">
+                    <i id="ambientSoundIcon" data-lucide="cloud-rain" class="w-4 h-4"></i>
+                </button>
+
+                <!-- Fullscreen Toggle -->
+                <button onclick="toggleFullscreen()" class="p-2.5 rounded-xl glass-button text-slate-300 hover:text-white" title="Toggle Fullscreen">
+                    <i data-lucide="maximize-2" class="w-4 h-4"></i>
+                </button>
+            </div>
+        </header>
+
+        <!-- Center Stage Countdown Display -->
+        <main class="w-full max-w-4xl mx-auto my-auto py-6 flex flex-col items-center justify-center">
+
+            <!-- Clean Floating Countdown Container (No Heavy Box Border) -->
+            <div id="timerCard" class="p-4 sm:p-8 w-full max-w-3xl transition-all duration-500 relative flex flex-col items-center">
+
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-8 w-full justify-items-center">
+                    
+                    <!-- Days Circle Ring -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center">
+                            <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" class="text-white/5" fill="transparent" />
+                                <circle id="ring-days" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" stroke-dasharray="263.89" stroke-dashoffset="0" stroke-linecap="round" class="text-slate-400/60 transition-all duration-700 ease-out" fill="transparent" />
+                            </svg>
+                            <div class="absolute flex flex-col items-center justify-center text-center">
+                                <span id="days" class="text-3xl sm:text-4xl md:text-5xl font-light font-mono-digits tracking-tight text-slate-100">00</span>
+                                <span class="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400/60 mt-1">Days</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hours Circle Ring -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center">
+                            <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" class="text-white/5" fill="transparent" />
+                                <circle id="ring-hours" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" stroke-dasharray="263.89" stroke-dashoffset="0" stroke-linecap="round" class="text-slate-300/70 transition-all duration-700 ease-out" fill="transparent" />
+                            </svg>
+                            <div class="absolute flex flex-col items-center justify-center text-center">
+                                <span id="hours" class="text-3xl sm:text-4xl md:text-5xl font-light font-mono-digits tracking-tight text-slate-100">00</span>
+                                <span class="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400/60 mt-1">Hours</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Minutes Circle Ring -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center">
+                            <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" class="text-white/5" fill="transparent" />
+                                <circle id="ring-minutes" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" stroke-dasharray="263.89" stroke-dashoffset="0" stroke-linecap="round" class="text-teal-200/70 transition-all duration-700 ease-out" fill="transparent" />
+                            </svg>
+                            <div class="absolute flex flex-col items-center justify-center text-center">
+                                <span id="minutes" class="text-3xl sm:text-4xl md:text-5xl font-light font-mono-digits tracking-tight text-slate-100">00</span>
+                                <span class="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400/60 mt-1">Minutes</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Seconds Circle Ring -->
+                    <div class="flex flex-col items-center">
+                        <div class="relative w-28 h-28 sm:w-36 sm:h-36 md:w-40 md:h-40 flex items-center justify-center">
+                            <svg class="w-full h-full -rotate-90 transform" viewBox="0 0 100 100">
+                                <circle cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" class="text-white/5" fill="transparent" />
+                                <circle id="ring-seconds" cx="50" cy="50" r="42" stroke="currentColor" stroke-width="2.5" stroke-dasharray="263.89" stroke-dashoffset="0" stroke-linecap="round" class="text-emerald-300/80 transition-all duration-700 ease-out" fill="transparent" />
+                            </svg>
+                            <div class="absolute flex flex-col items-center justify-center text-center">
+                                <span id="seconds" class="text-3xl sm:text-4xl md:text-5xl font-light font-mono-digits tracking-tight text-slate-100">00</span>
+                                <span class="text-[9px] sm:text-[10px] font-medium uppercase tracking-[0.2em] text-slate-400/60 mt-1">Seconds</span>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Minimal Timer Control Buttons -->
+                <div class="mt-10 flex flex-wrap items-center justify-center gap-3 w-full">
+                    <button id="toggleRunBtn" onclick="toggleTimer()" class="px-8 py-2.5 rounded-xl bg-slate-100/10 hover:bg-slate-100/20 text-slate-100 font-medium text-xs border border-white/10 flex items-center gap-2 transform active:scale-95 transition-all backdrop-blur-md">
+                        <i id="playIcon" data-lucide="play" class="w-3.5 h-3.5 fill-current"></i>
+                        <span id="playBtnText">Start Focus</span>
+                    </button>
+                    
+                    <button onclick="resetTimer()" class="px-5 py-2.5 rounded-xl glass-button text-slate-300 font-medium text-xs flex items-center gap-2">
+                        <i data-lucide="rotate-ccw" class="w-3.5 h-3.5"></i>
+                        <span>Reset</span>
+                    </button>
+
+                    <button onclick="toggleConfigModal()" class="px-5 py-2.5 rounded-xl glass-button text-slate-300 font-medium text-xs flex items-center gap-2">
+                        <i data-lucide="calendar" class="w-3.5 h-3.5"></i>
+                        <span>Custom Date</span>
+                    </button>
+                </div>
+
+            </div>
+
+            <!-- Minimal Quick Presets -->
+            <div class="mt-4 w-full max-w-md flex flex-wrap justify-center items-center gap-2">
+                <button onclick="setPresetMinutes(25)" class="px-3 py-1.5 text-xs font-light text-slate-300/80 hover:text-white rounded-lg glass-button">25m</button>
+                <button onclick="setPresetMinutes(50)" class="px-3 py-1.5 text-xs font-light text-slate-300/80 hover:text-white rounded-lg glass-button">50m</button>
+                <button onclick="setPresetMinutes(5)" class="px-3 py-1.5 text-xs font-light text-slate-300/80 hover:text-white rounded-lg glass-button">5m</button>
+                <button onclick="setPresetMinutes(15)" class="px-3 py-1.5 text-xs font-light text-slate-300/80 hover:text-white rounded-lg glass-button">15m</button>
+                <button onclick="setPresetHours(1)" class="px-3 py-1.5 text-xs font-light text-slate-300/80 hover:text-white rounded-lg glass-button">1h</button>
+            </div>
+
+        </main>
+
+        <!-- Minimal Empty Bottom Spacer -->
+        <footer class="w-full max-w-5xl mx-auto py-2"></footer>
+
+    </div>
+
+    <!-- Custom Target Date Modal -->
+    <div id="configModal" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-md hidden transition-opacity duration-300">
+        <div class="glass-button bg-[#0c1014]/90 p-6 rounded-2xl w-full max-w-sm border border-white/10 shadow-2xl relative">
+            <button onclick="toggleConfigModal()" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1.5">
+                <i data-lucide="x" class="w-4 h-4"></i>
+            </button>
+            <h2 class="text-base font-medium mb-1 flex items-center gap-2 text-slate-100">
+                <i data-lucide="clock" class="w-4 h-4 text-slate-300"></i> Set Target Time
+            </h2>
+            <p class="text-xs text-slate-400 mb-5">Pick a deadline for your study goal.</p>
+            
+            <form onsubmit="handleCustomDateTimeSubmit(event)" class="space-y-4">
+                <div>
+                    <label class="block text-[10px] font-medium uppercase tracking-wider text-slate-300 mb-1.5">Target Deadline</label>
+                    <input type="datetime-local" id="targetDateTimePicker" required class="w-full glass-input px-3.5 py-2 rounded-xl font-mono text-xs">
+                </div>
+
+                <div class="pt-2 flex gap-2">
+                    <button type="button" onclick="toggleConfigModal()" class="w-1/2 py-2 rounded-xl glass-button text-xs font-medium text-slate-300">Cancel</button>
+                    <button type="submit" class="w-1/2 py-2 rounded-xl bg-white/15 hover:bg-white/25 text-xs font-medium text-white border border-white/10">Apply</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Application Engine Logic -->
+    <script>
+        // --- Core Application State ---
+        let countdownTarget = null;
+        let timerInterval = null;
+        let isRunning = false;
+        let isAmbientPlaying = false;
+        
+        // --- Idle UI Hide Logic ---
+        let idleTimer = null;
+        const uiWrapper = document.getElementById('uiWrapper');
+
+        function resetIdleTimer() {
+            uiWrapper.classList.remove('idle-hidden');
+            clearTimeout(idleTimer);
+            if (isRunning) {
+                idleTimer = setTimeout(() => {
+                    uiWrapper.classList.add('idle-hidden');
+                }, 3500);
+            }
+        }
+
+        window.addEventListener('mousemove', resetIdleTimer);
+        window.addEventListener('keydown', resetIdleTimer);
+        window.addEventListener('touchstart', resetIdleTimer);
+
+        // --- Calm Foggy Peaks Canvas Rendering Engine ---
+        const canvas = document.getElementById('bgCanvas');
+        const ctx = canvas.getContext('2d');
+        let width, height;
+        let animationFrameId;
+        let animTime = 0;
+        let fogParticles = [];
+
+        function resizeCanvas() {
+            width = canvas.width = window.innerWidth;
+            height = canvas.height = window.innerHeight;
+            initFogParticles();
+        }
+
+        window.addEventListener('resize', resizeCanvas);
+
+        function initFogParticles() {
+            fogParticles = [];
+            for (let i = 0; i < 22; i++) {
+                fogParticles.push({
+                    x: Math.random() * width,
+                    y: Math.random() * height * 0.85,
+                    radius: Math.random() * 140 + 90,
+                    vx: Math.random() * 0.15 + 0.03,
+                    alpha: Math.random() * 0.07 + 0.02
+                });
+            }
+        }
+
+        function drawMountainRange(baseY, peakHeight, color, offset) {
+            ctx.beginPath();
+            ctx.moveTo(0, height);
+            for (let x = 0; x <= width; x += 30) {
+                const y = baseY - Math.sin((x + offset) * 0.0025) * peakHeight - Math.cos(x * 0.006) * (peakHeight * 0.35);
+                ctx.lineTo(x, y);
+            }
+            ctx.lineTo(width, height);
+            ctx.fillStyle = color;
+            ctx.fill();
+        }
+
+        function drawBackground() {
+            animTime += 0.01;
+
+            // Deep Foggy Night/Atmospheric Sky
+            ctx.fillStyle = '#06080b';
+            ctx.fillRect(0, 0, width, height);
+
+            // Layered Distant Mountain Silhouettes
+            drawMountainRange(height * 0.65, 120, 'rgba(12, 17, 22, 0.95)', animTime * 8);
+            drawMountainRange(height * 0.78, 85, 'rgba(9, 12, 16, 0.98)', animTime * 4 + 400);
+
+            // Drifting Slow Fog Layers
+            fogParticles.forEach(p => {
+                p.x += p.vx;
+                if (p.x - p.radius > width) p.x = -p.radius;
+
+                let fogGrad = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, p.radius);
+                fogGrad.addColorStop(0, `rgba(175, 195, 205, ${p.alpha})`);
+                fogGrad.addColorStop(1, 'transparent');
+
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                ctx.fillStyle = fogGrad;
+                ctx.fill();
+            });
+
+            animationFrameId = requestAnimationFrame(drawBackground);
+        }
+
+        // --- Timer Countdown Logic ---
+
+        function updateCountdownDisplay() {
+            if (!countdownTarget) {
+                setDigitText('days', '00');
+                setDigitText('hours', '00');
+                setDigitText('minutes', '00');
+                setDigitText('seconds', '00');
+                updateRings(0, 0, 0, 0);
+                return;
+            }
+
+            const now = new Date().getTime();
+            const distance = countdownTarget - now;
+
+            if (distance <= 0) {
+                clearInterval(timerInterval);
+                isRunning = false;
+                updatePlayButtonState();
+
+                setDigitText('days', '00');
+                setDigitText('hours', '00');
+                setDigitText('minutes', '00');
+                setDigitText('seconds', '00');
+                updateRings(0, 0, 0, 0);
+
+                document.getElementById('timerCard').classList.add('finished-pulse');
+                playGentleSineChime();
+                return;
+            }
+
+            const days = Math.floor(distance / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            setDigitText('days', days < 10 ? '0' + days : days);
+            setDigitText('hours', hours < 10 ? '0' + hours : hours);
+            setDigitText('minutes', minutes < 10 ? '0' + minutes : minutes);
+            setDigitText('seconds', seconds < 10 ? '0' + seconds : seconds);
+
+            updateRings(days, hours, minutes, seconds);
+        }
+
+        function setDigitText(id, val) {
+            const el = document.getElementById(id);
+            if (el.innerText !== String(val)) {
+                el.innerText = val;
+            }
+        }
+
+        function updateRings(d, h, m, s) {
+            const circumference = 263.89;
+            const daysDash = circumference - (Math.min(d, 30) / 30) * circumference;
+            const hoursDash = circumference - (h / 24) * circumference;
+            const minutesDash = circumference - (m / 60) * circumference;
+            const secondsDash = circumference - (s / 60) * circumference;
+
+            document.getElementById('ring-days').style.strokeDashoffset = daysDash;
+            document.getElementById('ring-hours').style.strokeDashoffset = hoursDash;
+            document.getElementById('ring-minutes').style.strokeDashoffset = minutesDash;
+            document.getElementById('ring-seconds').style.strokeDashoffset = secondsDash;
+        }
+
+        function toggleTimer() {
+            if (!countdownTarget) {
+                setPresetMinutes(25);
+                return;
+            }
+
+            if (isRunning) {
+                clearInterval(timerInterval);
+                isRunning = false;
+            } else {
+                document.getElementById('timerCard').classList.remove('finished-pulse');
+                isRunning = true;
+                timerInterval = setInterval(updateCountdownDisplay, 1000);
+                updateCountdownDisplay();
+            }
+            updatePlayButtonState();
+            resetIdleTimer();
+        }
+
+        function resetTimer() {
+            clearInterval(timerInterval);
+            isRunning = false;
+            countdownTarget = null;
+            document.getElementById('timerCard').classList.remove('finished-pulse');
+            updateCountdownDisplay();
+            updatePlayButtonState();
+            uiWrapper.classList.remove('idle-hidden');
+        }
+
+        function updatePlayButtonState() {
+            const playIcon = document.getElementById('playIcon');
+            const playBtnText = document.getElementById('playBtnText');
+
+            if (isRunning) {
+                playIcon.setAttribute('data-lucide', 'pause');
+                playBtnText.innerText = 'Pause Focus';
+            } else {
+                playIcon.setAttribute('data-lucide', 'play');
+                playBtnText.innerText = countdownTarget ? 'Resume Focus' : 'Start Focus';
+            }
+            lucide.createIcons();
+        }
+
+        function setPresetMinutes(mins) {
+            const now = new Date();
+            countdownTarget = new Date(now.getTime() + mins * 60 * 1000).getTime();
+            startNewCountdown();
+        }
+
+        function setPresetHours(hours) {
+            const now = new Date();
+            countdownTarget = new Date(now.getTime() + hours * 3600 * 1000).getTime();
+            startNewCountdown();
+        }
+
+        function startNewCountdown() {
+            clearInterval(timerInterval);
+            document.getElementById('timerCard').classList.remove('finished-pulse');
+            isRunning = true;
+            updatePlayButtonState();
+            updateCountdownDisplay();
+            timerInterval = setInterval(updateCountdownDisplay, 1000);
+            resetIdleTimer();
+        }
+
+        // --- Custom Modal Form ---
+        function toggleConfigModal() {
+            const modal = document.getElementById('configModal');
+            modal.classList.toggle('hidden');
+
+            if (!modal.classList.contains('hidden')) {
+                const defaultDate = new Date(Date.now() + 3600 * 1000);
+                const isoStr = new Date(defaultDate.getTime() - defaultDate.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+                document.getElementById('targetDateTimePicker').value = isoStr;
+            }
+        }
+
+        function handleCustomDateTimeSubmit(e) {
+            e.preventDefault();
+            const dateVal = document.getElementById('targetDateTimePicker').value;
+
+            if (dateVal) {
+                countdownTarget = new Date(dateVal).getTime();
+                toggleConfigModal();
+                startNewCountdown();
+            }
+        }
+
+        // --- Web Audio Synthesizer (Ambient Soundscape & Gentle Chime) ---
+        let audioCtx = null;
+        let ambientNoiseNode = null;
+        let ambientGainNode = null;
+
+        function initAudioContext() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function toggleAmbientSound() {
+            initAudioContext();
+            isAmbientPlaying = !isAmbientPlaying;
+            const btn = document.getElementById('ambientSoundBtn');
+
+            if (isAmbientPlaying) {
+                startAmbientSound();
+                btn.classList.add('bg-white/15', 'border-white/25', 'text-white');
+            } else {
+                stopAmbientSound();
+                btn.classList.remove('bg-white/15', 'border-white/25', 'text-white');
+            }
+        }
+
+        function startAmbientSound() {
+            if (!audioCtx) return;
+            stopAmbientSound();
+
+            const bufferSize = audioCtx.sampleRate * 2;
+            const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+            const data = buffer.getChannelData(0);
+            let lastOut = 0.0;
+
+            for (let i = 0; i < bufferSize; i++) {
+                let white = Math.random() * 2 - 1;
+                data[i] = (lastOut + (0.02 * white)) / 1.02;
+                lastOut = data[i];
+                data[i] *= 3.5;
+            }
+
+            ambientNoiseNode = audioCtx.createBufferSource();
+            ambientNoiseNode.buffer = buffer;
+            ambientNoiseNode.loop = true;
+
+            const filter = audioCtx.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.value = 450;
+
+            ambientGainNode = audioCtx.createGain();
+            ambientGainNode.gain.value = 0.06;
+
+            ambientNoiseNode.connect(filter);
+            filter.connect(ambientGainNode);
+            ambientGainNode.connect(audioCtx.destination);
+
+            ambientNoiseNode.start();
+        }
+
+        function stopAmbientSound() {
+            if (ambientNoiseNode) {
+                try {
+                    ambientNoiseNode.stop();
+                    ambientNoiseNode.disconnect();
+                } catch(e) {}
+                ambientNoiseNode = null;
+            }
+        }
+
+        function playGentleSineChime() {
+            initAudioContext();
+            if (!audioCtx) return;
+
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(440, now); // A4 note
+            osc.frequency.exponentialRampToValueAtTime(554.37, now + 1.0); // C#5
+
+            gain.gain.setValueAtTime(0, now);
+            gain.gain.linearRampToValueAtTime(0.12, now + 0.1);
+            gain.gain.exponentialRampToValueAtTime(0.001, now + 3.0);
+
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            osc.start(now);
+            osc.stop(now + 3.0);
+        }
+
+        // --- Fullscreen Toggle ---
+        function toggleFullscreen() {
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(() => {});
+            } else {
+                if (document.exitFullscreen) {
+                    document.exitFullscreen();
+                }
+            }
+        }
+
+        // Initialization
+        window.onload = function () {
+            lucide.createIcons();
+            resizeCanvas();
+            drawBackground();
+            setPresetMinutes(25);
+        };
+    </script>
+</body>
+</html>
